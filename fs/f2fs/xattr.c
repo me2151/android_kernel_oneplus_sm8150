@@ -307,7 +307,7 @@ static int lookup_all_xattrs(struct inode *inode, struct page *ipage,
 		return -ENODATA;
 
 	*base_size = inline_size + size + XATTR_PADDING_SIZE;
-	txattr_addr = f2fs_kzalloc(F2FS_I_SB(inode), *base_size, GFP_NOFS);
+	txattr_addr = kzalloc(*base_size, GFP_F2FS_ZERO);
 	if (!txattr_addr)
 		return -ENOMEM;
 
