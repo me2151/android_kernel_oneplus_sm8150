@@ -377,7 +377,11 @@ int dwc3_send_gadget_ep_cmd(struct dwc3_ep *dep, unsigned cmd,
 {
 	const struct usb_endpoint_descriptor *desc = dep->endpoint.desc;
 	struct dwc3		*dwc = dep->dwc;
+<<<<<<< HEAD
 	u32			timeout = 3000;
+=======
+	u32			timeout = 5000;
+>>>>>>> 5a174aebcf54... usb: dwc3: Increase timeout for CmdAct cleared by device controller
 	u32			saved_config = 0;
 	u32			reg;
 
