@@ -1,4 +1,4 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -319,6 +319,19 @@ int ipa_setup_odl_pipe(void)
 	ipa_odl_ep_cfg->desc_fifo_sz = IPA_ODL_RX_RING_SIZE *
 						IPA_FIFO_ELEMENT_SIZE;
 	ipa3_odl_ctx->odl_client_hdl = -1;
+
+	/* For MHIP, ODL functionality is DMA. So bypass aggregation, checksum
+	 * offload, hdr_len.
+	 */
+	if (ipa3_ctx->platform_type == IPA_PLAT_TYPE_APQ &&
+		ipa3_is_mhip_offload_enabled()) {
+		IPADBG("MHIP enabled: bypass aggr + csum offload for ODL");
+		ipa_odl_ep_cfg->ipa_ep_cfg.aggr.aggr_en = IPA_BYPASS_AGGR;
+		ipa_odl_ep_cfg->ipa_ep_cfg.cfg.cs_offload_en =
+			IPA_DISABLE_CS_OFFLOAD;
+		ipa_odl_ep_cfg->ipa_ep_cfg.hdr.hdr_len = 0;
+	}
+
 	ret = ipa3_setup_sys_pipe(ipa_odl_ep_cfg,
 			&ipa3_odl_ctx->odl_client_hdl);
 	return ret;
@@ -585,7 +598,9 @@ static long ipa_adpl_ioctl(struct file *filp,
 	switch (cmd) {
 	case IPA_IOC_ODL_GET_AGG_BYTE_LIMIT:
 		odl_pipe_info.agg_byte_limit =
-		ipa3_odl_ctx->odl_sys_param.ipa_ep_cfg.aggr.aggr_byte_limit;
+		/*Modem expecting value in bytes. so passing 15 = 15*1024*/
+		(ipa3_odl_ctx->odl_sys_param.ipa_ep_cfg.aggr.aggr_byte_limit *
+			1024);
 		if (copy_to_user((void __user *)arg, &odl_pipe_info,
 					sizeof(odl_pipe_info))) {
 			retval = -EFAULT;

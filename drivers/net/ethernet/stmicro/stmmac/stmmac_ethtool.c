@@ -376,6 +376,7 @@ stmmac_ethtool_set_link_ksettings(struct net_device *dev,
 	struct stmmac_priv *priv = netdev_priv(dev);
 	struct phy_device *phy = dev->phydev;
 	int rc;
+	u32 cmd_speed = cmd->base.speed;
 
 	if (priv->hw->pcs & STMMAC_PCS_RGMII ||
 	    priv->hw->pcs & STMMAC_PCS_SGMII) {
@@ -392,18 +393,23 @@ stmmac_ethtool_set_link_ksettings(struct net_device *dev,
 			ADVERTISED_10baseT_Half |
 			ADVERTISED_10baseT_Full);
 
-		spin_lock(&priv->lock);
+		mutex_lock(&priv->lock);
 
 		if (priv->hw->mac->pcs_ctrl_ane)
 			priv->hw->mac->pcs_ctrl_ane(priv->ioaddr, 1,
 						    priv->hw->ps, 0);
 
-		spin_unlock(&priv->lock);
+		mutex_unlock(&priv->lock);
 
 		return 0;
 	}
 
-	rc = phy_ethtool_ksettings_set(phy, cmd);
+	/* Half duplex is not supported */
+	if (cmd->base.duplex != DUPLEX_FULL ||
+	    (cmd_speed == SPEED_1000 && cmd->base.autoneg == AUTONEG_DISABLE))
+		rc = -EINVAL;
+	else
+		rc = phy_ethtool_ksettings_set(phy, cmd);
 
 	return rc;
 }
@@ -615,12 +621,12 @@ static void stmmac_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 {
 	struct stmmac_priv *priv = netdev_priv(dev);
 
-	spin_lock_irq(&priv->lock);
+	mutex_lock(&priv->lock);
 	if (device_can_wakeup(priv->device)) {
 		wol->supported = WAKE_MAGIC | WAKE_UCAST;
 		wol->wolopts = priv->wolopts;
 	}
-	spin_unlock_irq(&priv->lock);
+	mutex_unlock(&priv->lock);
 }
 
 static int stmmac_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
@@ -649,9 +655,9 @@ static int stmmac_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
 		disable_irq_wake(priv->wol_irq);
 	}
 
-	spin_lock_irq(&priv->lock);
+	mutex_lock(&priv->lock);
 	priv->wolopts = wol->wolopts;
-	spin_unlock_irq(&priv->lock);
+	mutex_unlock(&priv->lock);
 
 	return 0;
 }

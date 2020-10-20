@@ -1,4 +1,4 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -33,7 +33,7 @@
 #define MAX_AQC_CHANNELS 2
 #define MAX_11AD_CHANNELS 5
 #define MAX_WDI2_CHANNELS 2
-#define MAX_WDI3_CHANNELS 2
+#define MAX_WDI3_CHANNELS 3
 #define MAX_MHIP_CHANNELS 4
 #define MAX_USB_CHANNELS 2
 
@@ -469,33 +469,6 @@ enum ipa_cpu_2_hw_offload_commands {
 	IPA_CPU_2_HW_CMD_OFFLOAD_STATS_DEALLOC =
 		FEATURE_ENUM_VAL(IPA_HW_FEATURE_OFFLOAD, 6),
 };
-
-/**
- * struct IpaOffloadStatschannel_info - channel info for uC
- * stats
- * @dir: Director of the channel ID DIR_CONSUMER =0,
- * DIR_PRODUCER = 1
- * @ch_id: Channel id of the IPA endpoint for which stats need
- * to be calculated, 0xFF means invalid channel or disable stats
- * on already stats enabled channel
- */
-struct IpaOffloadStatschannel_info {
-	uint8_t dir;
-	uint8_t ch_id;
-} __packed;
-
-/**
- * struct IpaHwOffloadStatsAllocCmdData_t - protocol info for uC
- * stats start
- * @protocol: Enum that indicates the protocol type
- * @ch_id_info: Channel id of the IPA endpoint for which stats
- * need to be calculated
- */
-struct IpaHwOffloadStatsAllocCmdData_t {
-	uint32_t protocol;
-	struct IpaOffloadStatschannel_info
-		ch_id_info[MAX_CH_STATS_SUPPORTED];
-} __packed;
 
 /**
  * struct IpaHwOffloadStatsDeAllocCmdData_t - protocol info for

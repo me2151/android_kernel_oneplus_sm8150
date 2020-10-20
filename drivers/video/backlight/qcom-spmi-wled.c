@@ -1,6 +1,6 @@
 /* Copyright (c) 2015, Sony Mobile Communications, AB.
  *
- * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -124,6 +124,8 @@
 
 #define WLED5_CTRL_TEST4_REG		0xe5
 #define  WLED5_TEST4_EN_SH_SS		BIT(5)
+
+#define WLED5_CTRL_PBUS_WRITE_SYNC_CTL	0xef
 
 /* WLED5 specific sink registers */
 #define WLED5_SINK_MOD_A_EN_REG		0x50
@@ -299,15 +301,34 @@ static inline bool is_wled5(struct wled *wled)
 static int wled_module_enable(struct wled *wled, int val)
 {
 	int rc;
+	int reg;
 
 	if (wled->force_mod_disable)
 		return 0;
+
+	/* Force HFRC off */
+	if (*wled->version == WLED_PM8150L) {
+		reg = val ? 0 : 3;
+		rc = regmap_write(wled->regmap, wled->ctrl_addr +
+				  WLED5_CTRL_PBUS_WRITE_SYNC_CTL, reg);
+		if (rc < 0)
+			return rc;
+	}
 
 	rc = regmap_update_bits(wled->regmap, wled->ctrl_addr +
 			WLED_CTRL_MOD_ENABLE, WLED_CTRL_MOD_EN_MASK,
 			val << WLED_CTRL_MODULE_EN_SHIFT);
 	if (rc < 0)
 		return rc;
+
+	/* Force HFRC off */
+	if (*wled->version == WLED_PM8150L && val) {
+		rc = regmap_write(wled->regmap, wled->sink_addr +
+				  WLED5_SINK_FLASH_SHDN_CLR_REG, 0);
+		if (rc < 0)
+			return rc;
+	}
+
 	/*
 	 * Wait for at least 10ms before enabling OVP fault interrupt after
 	 * enabling the module so that soft start is completed. Keep the OVP
@@ -1510,7 +1531,8 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 					int *max_current)
 {
 	struct wled *wled;
-	int rc, ocv_mv, r_bat_mohms, i_bat_ma, i_sink_ma = 0, max_fsc_ma;
+	int rc, ocv_mv, r_bat_mohms, i_bat_ma;
+	int64_t max_fsc_ma, i_sink_ma = 0;
 	int64_t p_out_string, p_out, p_in, v_safe_mv, i_flash_ma, v_ph_mv;
 
 	if (!strcmp(led_cdev->name, "wled_switch"))
@@ -1556,7 +1578,7 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 	p_out_string = ((wled->leds_per_string * V_LED_MV) + V_HDRM_MV) *
 			I_FLASH_MAX_MA;
 	p_out = p_out_string * wled->num_strings;
-	p_in = (p_out * 1000) / EFF_FACTOR;
+	p_in = div_s64(p_out * 1000, EFF_FACTOR);
 
 	pr_debug("p_out_string: %lld, p_out: %lld, p_in: %lld\n", p_out_string,
 		p_out, p_in);
@@ -1568,8 +1590,9 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 		return 0;
 	}
 
-	i_flash_ma = p_in / v_safe_mv;
-	v_ph_mv = ocv_mv - ((i_bat_ma + i_flash_ma) * r_bat_mohms) / 1000;
+	i_flash_ma = div_s64(p_in, v_safe_mv);
+	v_ph_mv = ocv_mv - div_s64(((i_bat_ma + i_flash_ma) * r_bat_mohms),
+							1000);
 
 	pr_debug("v_safe: %lld, i_flash: %lld, v_ph: %lld\n", v_safe_mv,
 		i_flash_ma, v_ph_mv);
@@ -1578,19 +1601,22 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 	if (wled->num_strings == 3 && wled->leds_per_string == 8) {
 		if (v_ph_mv < 3410) {
 			/* For 8s3p, I_sink(mA) = 25.396 * Vph(V) - 26.154 */
-			i_sink_ma = (((25396 * v_ph_mv) / 1000) - 26154) / 1000;
+			i_sink_ma = div_s64((div_s64((25396 * v_ph_mv),
+					1000) - 26154), 1000);
 			i_sink_ma *= wled->num_strings;
 		}
 	} else if (wled->num_strings == 3 && wled->leds_per_string == 6) {
 		if (v_ph_mv < 2800) {
 			/* For 6s3p, I_sink(mA) = 41.311 * Vph(V) - 52.334 */
-			i_sink_ma = (((41311 * v_ph_mv) / 1000) - 52334) / 1000;
+			i_sink_ma = div_s64((div_s64((41311 * v_ph_mv),
+					1000) - 52334), 1000);
 			i_sink_ma *= wled->num_strings;
 		}
 	} else if (wled->num_strings == 4 && wled->leds_per_string == 6) {
 		if (v_ph_mv < 3400) {
 			/* For 6s4p, I_sink(mA) = 26.24 * Vph(V) - 24.834 */
-			i_sink_ma = (((26240 * v_ph_mv) / 1000) - 24834) / 1000;
+			i_sink_ma = div_s64((div_s64((26240 * v_ph_mv),
+					1000) - 24834), 1000);
 			i_sink_ma *= wled->num_strings;
 		}
 	} else if (v_ph_mv < 3200) {
