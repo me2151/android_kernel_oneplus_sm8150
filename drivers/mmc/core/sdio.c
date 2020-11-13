@@ -800,7 +800,6 @@ try_again:
 		}
 		return err;
 	}
-#endif
 
 #ifdef CONFIG_MMC_EMBEDDED_SDIO
 	if (host->embedded_sdio_data.cis)
